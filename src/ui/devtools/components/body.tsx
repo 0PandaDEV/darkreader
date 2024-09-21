@@ -9,6 +9,8 @@ import {ConfigEditor} from './config-editor';
 import {DynamicModeEditor} from './dynamic-mode-editor';
 import type {DevtoolsProps} from '../types';
 
+declare const __PLUS__: boolean;
+
 export default function Body(props: DevtoolsProps): Malevic.Child {
     const {data, actions, devtools} = props;
     const context = getContext();
@@ -27,9 +29,14 @@ export default function Body(props: DevtoolsProps): Malevic.Child {
     }
 
     const previewButtonText = data.settings.previewNewDesign ? 'Switch to old design' : 'Preview new design';
+    const previewNewestButtonText = data.settings.previewNewestDesign ? 'Switch to desktop design' : 'Preview new mobile design';
 
     function toggleDesign(): void {
-        actions.changeSettings({previewNewDesign: !data.settings.previewNewDesign});
+        actions.changeSettings({previewNewDesign: !data.settings.previewNewDesign, previewNewestDesign: false});
+    }
+
+    function toggleNewestDesign(): void {
+        actions.changeSettings({previewNewestDesign: !data.settings.previewNewestDesign, previewNewDesign: false});
     }
 
     return (
@@ -46,20 +53,23 @@ export default function Body(props: DevtoolsProps): Malevic.Child {
                     <ConfigEditor
                         header="Static Theme Editor"
                         text={devtools.staticThemesText}
-                        apply={actions.applyDevStaticThemes}
-                        reset={actions.resetDevStaticThemes}
+                        apply={(text) => actions.applyDevStaticThemes(text)}
+                        reset={() => actions.resetDevStaticThemes()}
                     />
                 </TabPanel.Tab>
                 <TabPanel.Tab id="filter-editor" label="Inversion Fix Editor">
                     <ConfigEditor
                         header="Inversion Fix Editor"
                         text={devtools.filterFixesText}
-                        apply={actions.applyDevInversionFixes}
-                        reset={actions.resetDevInversionFixes}
+                        apply={(text) => actions.applyDevInversionFixes(text)}
+                        reset={() => actions.resetDevInversionFixes()}
                     />
                 </TabPanel.Tab>
                 <TabPanel.Tab id="advanced" label="Advanced">
-                    {isMobile ? null : <Button class="preview-design-button" onclick={toggleDesign}>{previewButtonText}</Button>}
+                    <div class="buttons">
+                        {isMobile ? null : <Button class="preview-design-button" onclick={toggleDesign}>{previewButtonText}</Button>}
+                        {__PLUS__ ? <Button class="preview-design-button" onclick={toggleNewestDesign}>{previewNewestButtonText}</Button> : null}
+                    </div>
                 </TabPanel.Tab>
             </TabPanel>
             <Overlay />

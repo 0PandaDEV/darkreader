@@ -27,7 +27,7 @@ const VAR_TYPE_BGIMG = 1 << 3;
 
 export class VariablesStore {
     private varTypes = new Map<string, number>();
-    private rulesQueue: CSSRuleList[] = [];
+    private rulesQueue = new Set<CSSRuleList>();
     private inlineStyleQueue: CSSStyleDeclaration[] = [];
     private definedVars = new Set<string>();
     private varRefs = new Map<string, Set<string>>();
@@ -42,7 +42,7 @@ export class VariablesStore {
 
     clear(): void {
         this.varTypes.clear();
-        this.rulesQueue.splice(0);
+        this.rulesQueue.clear();
         this.inlineStyleQueue.splice(0);
         this.definedVars.clear();
         this.varRefs.clear();
@@ -63,7 +63,7 @@ export class VariablesStore {
     }
 
     addRulesForMatching(rules: CSSRuleList): void {
-        this.rulesQueue.push(rules);
+        this.rulesQueue.add(rules);
     }
 
     addInlineStyleForMatching(style: CSSStyleDeclaration): void {
@@ -71,7 +71,7 @@ export class VariablesStore {
     }
 
     matchVariablesAndDependents(): void {
-        if (this.rulesQueue.length === 0 && this.inlineStyleQueue.length === 0) {
+        if (this.rulesQueue.size === 0 && this.inlineStyleQueue.length === 0) {
             return;
         }
         this.changedTypeVars.clear();
@@ -226,13 +226,9 @@ export class VariablesStore {
     }
 
     getModifierForVarDependant(property: string, sourceValue: string): CSSValueModifier | null {
-        // TODO(gusted): This condition is incorrect, as the sourceValue still contains a variable.
-        // Simply replacing it with some definition is incorrect as variables are element-independent.
-        // Fully handling this requires having a function that gives the variable's value given an
-        // element's position in the DOM, but that's quite computationally hard to facilitate. We'll
-        // probably just handle edge-cases like `rgb(22 163 74/var(--tb-bg-opacity)` and hope that
-        // lowering the opacity is enough.
-        if (sourceValue.match(/^\s*(rgb|hsl)a?\(/)) {
+        const isConstructedColor = sourceValue.match(/^\s*(rgb|hsl)a?\(/);
+        const isSimpleConstructedColor = sourceValue.match(/^rgba?\(var\(--[\-_A-Za-z0-9]+\)(\s*,?\/?\s*0?\.\d+)?\)$/);
+        if (isConstructedColor && !isSimpleConstructedColor) {
             const isBg = property.startsWith('background');
             const isText = isTextColorProperty(property);
             return (theme) => {
@@ -244,21 +240,25 @@ export class VariablesStore {
                 return modifier(value, theme);
             };
         }
-        if (property === 'background-color') {
+        if (property === 'background-color' || (isSimpleConstructedColor && property === 'background')) {
             return (theme) => {
+                const defaultFallback = tryModifyBgColor(isConstructedColor ? '255, 255, 255' : '#ffffff', theme);
                 return replaceCSSVariablesNames(
                     sourceValue,
                     (v) => wrapBgColorVariableName(v),
                     (fallback) => tryModifyBgColor(fallback, theme),
+                    defaultFallback,
                 );
             };
         }
         if (isTextColorProperty(property)) {
             return (theme) => {
+                const defaultFallback = tryModifyTextColor(isConstructedColor ? '0, 0, 0' : '#000000', theme);
                 return replaceCSSVariablesNames(
                     sourceValue,
                     (v) => wrapTextColorVariableName(v),
                     (fallback) => tryModifyTextColor(fallback, theme),
+                    defaultFallback,
                 );
             };
         }
@@ -293,9 +293,9 @@ export class VariablesStore {
 
                 const modified = modify();
                 if (unknownVars.size > 0) {
-                    // web.dev issue where the variable is never defined, but the fallback is.
+                    // web.dev and voice.google.com issue where the variable is never defined, but the fallback is.
                     // TODO: Return a fallback value along with a way to subscribe for a change.
-                    const isFallbackResolved = modified.match(/^var\(.*?, var\(--darkreader-bg--.*\)\)$/);
+                    const isFallbackResolved = modified.match(/^var\(.*?, (var\(--darkreader-bg--.*\))|(#[0-9A-Fa-f]+)|([a-z]+)|(rgba?\(.+\))|(hsla?\(.+\))\)$/);
                     if (isFallbackResolved) {
                         return modified;
                     }
@@ -353,7 +353,7 @@ export class VariablesStore {
         this.inlineStyleQueue.forEach((style) => {
             this.collectVarsFromCSSDeclarations(style);
         });
-        this.rulesQueue.splice(0);
+        this.rulesQueue.clear();
         this.inlineStyleQueue.splice(0);
     }
 
@@ -370,7 +370,7 @@ export class VariablesStore {
 
     private shouldProcessRootVariables() {
         return (
-            this.rulesQueue.length > 0 &&
+            this.rulesQueue.size > 0 &&
             document.documentElement.getAttribute('style')?.includes('--')
         );
     }
@@ -583,7 +583,7 @@ function getVariablesMatches(input: string): VariableMatch[] {
     return ranges;
 }
 
-function replaceVariablesMatches(input: string, replacer: (match: string) => string | null) {
+function replaceVariablesMatches(input: string, replacer: (match: string, count: number) => string | null) {
     const matches = getVariablesMatches(input);
     const matchesCount = matches.length;
     if (matchesCount === 0) {
@@ -591,7 +591,7 @@ function replaceVariablesMatches(input: string, replacer: (match: string) => str
     }
 
     const inputLength = input.length;
-    const replacements = matches.map((m) => replacer(m.value));
+    const replacements = matches.map((m) => replacer(m.value, matches.length));
     const parts: Array<string | null> = [];
     parts.push(input.substring(0, matches[0].start));
     for (let i = 0; i < matchesCount; i++) {
@@ -621,11 +621,15 @@ export function replaceCSSVariablesNames(
     value: string,
     nameReplacer: (varName: string) => string,
     fallbackReplacer?: (fallbackValue: string) => string,
+    finalFallback?: string,
 ): string {
     const matchReplacer = (match: string) => {
         const {name, fallback} = getVariableNameAndFallback(match);
         const newName = nameReplacer(name);
         if (!fallback) {
+            if (finalFallback) {
+                return `var(${newName}, ${finalFallback})`;
+            }
             return `var(${newName})`;
         }
 
@@ -675,7 +679,10 @@ function isVarDependant(value: string) {
 }
 
 function isConstructedColorVar(value: string) {
-    return value.match(/^\s*(rgb|hsl)a?\(/);
+    return (
+        value.match(/^\s*(rgb|hsl)a?\(/) ||
+        value.match(/^(((\d{1,3})|(var\([\-_A-Za-z0-9]+\))),?\s*?){3}$/)
+    );
 }
 
 function isTextColorProperty(property: string) {
@@ -727,10 +734,11 @@ function tryModifyBorderColor(color: string, theme: Theme) {
     return handleRawColorValue(color, theme, modifyBorderColor);
 }
 
-function insertVarValues(source: string, varValues: Map<string, string>, stack = new Set<string>()) {
+function insertVarValues(source: string, varValues: Map<string, string>, fullStack = new Set<string>()) {
     let containsUnresolvedVar = false;
-    const matchReplacer = (match: string) => {
+    const matchReplacer = (match: string, count: number) => {
         const {name, fallback} = getVariableNameAndFallback(match);
+        const stack = count > 1 ? new Set(fullStack) : fullStack;
         if (stack.has(name)) {
             containsUnresolvedVar = true;
             return null;

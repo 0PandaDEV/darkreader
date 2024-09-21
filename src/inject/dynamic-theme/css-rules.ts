@@ -4,7 +4,7 @@ import {escapeRegExpSpecialChars} from '../../utils/text';
 import {parseURL, getAbsoluteURL} from '../../utils/url';
 import {logInfo, logWarn} from '../utils/log';
 
-export function iterateCSSRules(rules: CSSRuleList | CSSRule[], iterate: (rule: CSSStyleRule) => void, onImportError?: () => void): void {
+export function iterateCSSRules(rules: CSSRuleList | CSSRule[] | Set<CSSRule>, iterate: (rule: CSSStyleRule) => void, onImportError?: () => void): void {
     forEach(rules, (rule) => {
         if (isStyleRule(rule)) {
             iterate(rule);
@@ -109,11 +109,13 @@ function handleEmptyShorthand(shorthand: string, style: CSSStyleDeclaration, ite
             let escapedSelector = escapeRegExpSpecialChars(parentRule.selectorText);
             escapedSelector = escapedSelector.replaceAll(/\s+/g, '\\s*'); // Space count can differ
             escapedSelector = escapedSelector.replaceAll(/::/g, '::?'); // ::before can be :before
-            const regexp = new RegExp(`${escapedSelector}\\s*{[^}]*?${shorthand}:\\s*([^;}]+)`);
+            const regexp = new RegExp(`${escapedSelector}\\s*{[^}]*${shorthand}:\\s*([^;}]+)`);
             const match = sourceCSSText.match(regexp);
             if (match) {
                 iterate(shorthand, match[1]);
             }
+        } else if (shorthand === 'background') {
+            iterate('background-color', '#ffffff');
         }
     }
 }
@@ -136,12 +138,11 @@ export function getCSSBaseBath(url: string): string {
 
 export function replaceCSSRelativeURLsWithAbsolute($css: string, cssBasePath: string): string {
     return $css.replace(cssURLRegex, (match) => {
-        const pathValue = getCSSURLValue(match);
-        // Sites can have any kind of specified URL, thus also invalid ones.
-        // To prevent the whole operation from failing, let's just skip those
-        // invalid URL's and let them be invalid.
         try {
-            return `url('${getAbsoluteURL(cssBasePath, pathValue)}')`;
+            const url = getCSSURLValue(match);
+            const absoluteURL = getAbsoluteURL(cssBasePath, url);
+            const escapedURL = absoluteURL.replaceAll('\'', '\\\'');
+            return `url('${escapedURL}')`;
         } catch (err) {
             logWarn('Not able to replace relative URL with Absolute URL, skipping');
             return match;

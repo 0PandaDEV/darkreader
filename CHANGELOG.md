@@ -1,3 +1,54 @@
+# 4.9.93 (September 20, 2024)
+
+- Experimental design for Microsoft Edge for Android.
+
+# 4.9.92 (September 10, 2024)
+
+- Detect website's dark theme by default.
+- Use Filter mode for particular websites by default (Google Docs, Microsoft Office).
+- Restored scrollbar colors.
+- Fixed breaking on default selection color.
+
+# 4.9.90 (September 1, 2024)
+
+- Fixed "Aw, Snap" in Google Search (Chrome and Edge on Windows).
+
+# 4.9.89 (August 23, 2024)
+
+- Removed www part from website URLs.
+- Enabled automation and dark theme detection by default for mobile version.
+- Fixed colors for static site fixes.
+- Apply ignored image selectors for gradients.
+
+# 4.9.88 (July 11, 2024)
+
+- Fixed breaking browser panels.
+
+# 4.9.87 (June 27, 2024)
+
+- Added link to Settings page.
+- Fixed CSS editor layout.
+- Fixed delay when opening settings.
+- Fixed warnings for protected pages.
+- Fixed conflicts with Dark Reader based scripts.
+- Improved fallback color support in CSS variables.
+- Japanese Help page translation.
+
+# 4.9.86 (May 30, 2024)
+
+- CSS variables performance optimizations.
+- Fixed Manifest V3 bugs.
+- Fixed loosing control over tabs after update.
+
+# 4.9.85 (May 14, 2024)
+
+- Bulgarian translation.
+- Improved color variables support.
+- Fixed handling styles with embedded SVGs.
+- Fixed Inversion Dev Tools.
+- Fixed inline SVG image analysis.
+- Fixed overriding icon fonts.
+
 # 4.9.84 (April 25, 2024)
 
 - Improved Dev Tools (per site editor).

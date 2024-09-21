@@ -9,8 +9,7 @@ import rollupPluginTypescript from '@rollup/plugin-typescript';
 import typescript from 'typescript';
 
 import {createEchoServer} from './support/echo-server.js';
-import paths from '../../tasks/paths.js';
-const {rootPath} = paths;
+import {absolutePath} from '../../tasks/paths.js';
 
 /**
  * @param {Partial<LocalConfig>} config
@@ -46,7 +45,7 @@ export function configureKarma(config, env) {
             plugins: [
                 rollupPluginTypescript({
                     typescript,
-                    tsconfig: rootPath('tests/inject/tsconfig.json'),
+                    tsconfig: absolutePath('tests/inject/tsconfig.json'),
                     cacheDir: `${fs.realpathSync(os.tmpdir())}/darkreader_typescript_test_cache`,
                 }),
                 rollupPluginReplace({

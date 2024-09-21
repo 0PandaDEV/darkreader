@@ -1,5 +1,5 @@
 import {forEach, push} from '../../utils/array';
-import {iterateShadowHosts, createOptimizedTreeObserver, isReadyStateComplete, addReadyStateCompleteListener} from '../utils/dom';
+import {iterateShadowHosts, createOptimizedTreeObserver, isReadyStateComplete, addReadyStateCompleteListener, addDOMReadyListener, isDOMReady} from '../utils/dom';
 import {iterateCSSDeclarations} from './css-rules';
 import {getModifiableCSSDeclaration} from './modify-css';
 import type {CSSVariableModifier, ModifiedVarDeclaration} from './variables';
@@ -257,8 +257,6 @@ function shouldAnalyzeSVGAsImage(svg: SVGSVGElement) {
     }
     const shouldAnalyze = Boolean(
         svg && (
-            svg.role === 'img' ||
-            svg.parentElement?.role === 'img' ||
             svg.getAttribute('class')?.includes('logo') ||
             svg.parentElement?.getAttribute('class')?.includes('logo')
         )
@@ -376,7 +374,7 @@ export function overrideInlineStyle(element: HTMLElement, theme: Theme, ignoreIn
         }
         if (shouldAnalyzeSVGAsImage(svg)) {
             svgInversionCache.add(svg);
-            const handleSVGRoot = () => {
+            const analyzeSVGAsImage = () => {
                 let svgString = svg.outerHTML;
                 svgString = svgString.replaceAll('<style class="darkreader darkreader--sync" media="screen"></style>', '');
                 const dataURL = `data:image/svg+xml;base64,${btoa(svgString)}`;
@@ -386,13 +384,14 @@ export function overrideInlineStyle(element: HTMLElement, theme: Theme, ignoreIn
                         (details.isLarge && details.isLight && !details.isTransparent)
                     ) {
                         svg.setAttribute('data-darkreader-inline-invert', '');
+                    } else {
+                        svg.removeAttribute('data-darkreader-inline-invert');
                     }
                 });
             };
-            if (isReadyStateComplete()) {
-                handleSVGRoot();
-            } else {
-                addReadyStateCompleteListener(handleSVGRoot);
+            analyzeSVGAsImage();
+            if (!isDOMReady()) {
+                addDOMReadyListener(analyzeSVGAsImage);
             }
             return;
         }
